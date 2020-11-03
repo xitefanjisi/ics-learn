@@ -14,29 +14,37 @@ from tensorflow.keras.datasets import mnist, fashion_mnist, cifar10
 
 
 def convert_labels(y=None):
+    """convert labels so that the labels start from 0
 
+    :param y: 1D-array, labels to convert
+    :return: 1D-array, converted labers
+    """
     for idx, lb in enumerate(np.unique(y)):
         y[y == lb] = idx
     return y
 
 
-def intra_class_split(x=None, y=None, model_stg_1=None, rho=0.1):
+def intra_class_split(x=None, y=None, model_stg_1=None, rho=0.1, y_score=None):
 
-    assert y.min() == 0, 'labels should start with 0'
-    y_os = np.copy(y) + 1  # original labels start from 1; zero is reserved for open set class
+    y_os = np.copy(y) + 1  # zero is reserved for open set class
 
-    y_logits = model_stg_1.predict(x, batch_size=128)
-    y_hat = np.argmax(y_logits, axis=-1)
-    y_score = np.max(y_logits, axis=-1)
-
-    y_score[y_hat != y] = y_score.min()  # reset misclassified scores using minimum
+    if y_score is not None:
+        print('using predefined y_score to split data...')
+    elif model_stg_1 is not None:
+        print('use model_stg_1 to split data...')
+        y_logits = model_stg_1.predict(x, batch_size=128)
+        y_hat = np.argmax(y_logits, axis=-1)
+        y_score = np.max(y_logits, axis=-1)
+        y_score[y_hat != y] = y_score.min()  # reset misclassified scores using minimum
+        print('# misclassified %d' % len(np.where(y_hat != y)[0]))
+    else:
+        raise ValueError('Please enter a Keras model...')
 
     score_order = np.argsort(y_score)
     thr_idx = int(rho * len(y))
     thr = y_score[score_order[thr_idx]]
     y_os[score_order[:thr_idx]] = 0  # atypical samples with labels of 0; typical samples with labels starting from 1
 
-    print('# misclassified %d' % len(np.where(y_hat != y)[0]))
     print('min %.4f, max %.4f, thr %.4f' % (y_score.min(), y_score.max(), thr))
     print('y_os ratio', np.count_nonzero(y_os) / len(y_os))
     return y_os
@@ -46,6 +54,7 @@ def intra_class_split(x=None, y=None, model_stg_1=None, rho=0.1):
 def update_labels(y, target_labels):
     idx_cs = [np.where(y == i)[0] for i in target_labels]
     idx_cs = np.concatenate(idx_cs, axis=-1)
+    np.random.shuffle(idx_cs)  # mandatory, otherwise samples are ordered => bad for training
     idx_os = np.setdiff1d(np.arange(0, len(y)), idx_cs)
     return idx_cs, idx_os
 

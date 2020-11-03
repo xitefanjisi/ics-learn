@@ -52,6 +52,7 @@ class OpenSetRecognizer():
         self.num_os_classes = num_classes + 1
         self.hist_stg_1 = None
         self.hist_stg_2 = None
+        self.pretrain_flag = False
 
         if model_stg_1 is None:
             self.model_stg_1 = CNN(output_dim=self.num_classes)
@@ -69,29 +70,35 @@ class OpenSetRecognizer():
         self.model_stg_2.compile(optimizer=Adam(learning_rate=3e-4, decay=1e-8),
                                  loss='categorical_crossentropy', metrics=['accuracy'])
 
-    def fit(self, x, y, ics_train=True, rho=0.1, verbose=2, epochs=None, callback=None, **kwargs):
+    def pretrain(self, x, y, verbose=0, **kwargs):
+        self.hist_stg_1 = self.model_stg_1.fit(x=x, y=to_categorical(y), verbose=verbose, **kwargs)
+        self.pretrain_flag = True
 
-        assert y.max() == (len(np.unique(y)) - 1)
+    def fit(self, x, y, rho=0.1, verbose=2, model_stg_1=None, y_score=None, epochs=None, callback=None, **kwargs):
 
-        if ics_train:
-            print('training for intra-class splitting...')
-            self.hist_stg_1 = self.model_stg_1.fit(x=x, y=to_categorical(y),
-                                                   verbose=verbose, epochs=epochs[0], **kwargs)
-        else:
+        if y_score is not None:
             pass
-        print('training for open set recognition...')
-        y_os = intra_class_split(x, y, self.model_stg_1, rho=rho)
+        elif model_stg_1 is not None:
+            pass
+        elif self.pretrain_flag:
+            pass
+        else:
+            raise ValueError('Please train a model for splitting data...')
+
+        y_os = intra_class_split(x, y, model_stg_1, rho=rho, y_score=y_score)
         self.hist_stg_2 = self.model_stg_2.fit(x=x,
                                                y=[to_categorical(y, num_classes=self.num_classes),
                                                   to_categorical(y_os, num_classes=self.num_os_classes)],
-                                               verbose=verbose, epochs=epochs[1], callbacks=[callback],
+                                               verbose=verbose,
+                                               epochs=epochs[1],
+                                               callbacks=[callback],
                                                **kwargs)
 
     def predict(self, x):
-        return np.argmax(self.model_stg_2.predict(x=x, batch_size=64), axis=-1)
+        return np.argmax(self.model_stg_2.predict(x=x, batch_size=64)[1], axis=-1)
 
     def score(self, x, y):
-        y_hat = np.argmax(self.model_stg_2.predict(x=x, batch_size=64), axis=-1)
+        y_hat = np.argmax(self.model_stg_2.predict(x=x, batch_size=64)[1], axis=-1)
         return f1_score(y, y_hat, average='macro', pos_label=np.arange(1, self.num_os_classes))
 
     def decision_function(self, x):
