@@ -24,17 +24,17 @@ class CNN(tf.keras.Model):
         self.conv1 = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
         self.bn1 = BatchNormalization()
         self.lrelu1 = LeakyReLU(alpha=alpha)
-        self.conv2 = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
+        self.conv2 = Conv2D(filters=64, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
         self.bn2 = BatchNormalization()
         self.lrelu2 = LeakyReLU(alpha=alpha)
-        self.conv3 = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
+        self.conv3 = Conv2D(filters=128, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
         self.bn3 = BatchNormalization()
         self.lrelu3 = LeakyReLU(alpha=alpha)
         self.flt = Flatten()
         self.dense = Dense(units=output_dim, activation='linear')
         self.top = Softmax()
 
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs):
         x = self.conv1(inputs)
         x = self.bn1(x)
         x = self.lrelu1(x)
@@ -46,8 +46,40 @@ class CNN(tf.keras.Model):
         x = self.lrelu3(x)
         x = self.flt(x)
         x = self.dense(x)
-        x = self.top(x)
+#         x = self.top(x)
         return x
+
+
+class OSRNet(tf.keras.Model):
+    def __init__(self, output_dim=None, alpha=0.2):
+        super(OSRNet, self).__init__()
+        self.conv1 = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
+        self.bn1 = BatchNormalization()
+        self.lrelu1 = LeakyReLU(alpha=alpha)
+        self.conv2 = Conv2D(filters=64, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
+        self.bn2 = BatchNormalization()
+        self.lrelu2 = LeakyReLU(alpha=alpha)
+        self.conv3 = Conv2D(filters=128, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=None)
+        self.bn3 = BatchNormalization()
+        self.lrelu3 = LeakyReLU(alpha=alpha)
+        self.flt = Flatten()
+        self.cs_ly = Dense(units=output_dim, activation='softmax')
+        self.os_ly = Dense(units=output_dim+1, activation='softmax')
+
+    def call(self, inputs):
+        x = self.conv1(inputs)
+        x = self.bn1(x)
+        x = self.lrelu1(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.lrelu2(x)
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.lrelu3(x)
+        x = self.flt(x)
+        x_cs = self.cs_ly(x)
+        x_os = self.os_ly(x)
+        return [x_cs, x_os]
 
 
 class MLP(tf.keras.Model):
